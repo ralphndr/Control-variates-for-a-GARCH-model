@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Paper Explanation — Leluc, Portier & Segers (2021)</title>
+
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath:  [['$','$'],['\\(','\\)']],
+        displayMath: [['$$','$$'],['\\[','\\]']],
+        tags: 'ams'
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+
+  <style>
+    :root {
+      --blue:  #1a4f8a;
+      --teal:  #0d7377;
+      --bg:    #f9f9f9;
+      --card:  #ffffff;
+      --bdr:   #dde3ec;
+      --text:  #1c1c2e;
+      --sub:   #4a4a6a;
+      --acc:   #e8f0fb;
+      --warn:  #fff8e1;
+      --warnb: #f9a825;
+      --grn:   #e8f5e9;
+      --grnb:  #388e3c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; font-size: 17px; line-height: 1.75;
+           background: var(--bg); color: var(--text); padding: 2rem 1rem; }
+    .page { max-width: 860px; margin: 0 auto; }
+
+    header { background: var(--blue); color: white; padding: 2.5rem 2rem;
+             border-radius: 12px; margin-bottom: 2.5rem; }
+    header h1 { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    header p  { font-size: 0.95rem; opacity: 0.85; }
+    header a  { color: #afd4ff; }
+
+    section { background: var(--card); border: 1px solid var(--bdr);
+              border-radius: 10px; padding: 2rem 2.2rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.35rem; color: var(--blue);
+         border-bottom: 2px solid var(--blue); padding-bottom: 0.5rem; margin-bottom: 1.2rem; }
+    h3 { font-size: 1.1rem; color: var(--teal); margin: 1.6rem 0 0.7rem; }
+    p  { margin-bottom: 1rem; }
+
+    .box      { background: var(--acc);  border-left: 4px solid var(--blue);  border-radius: 6px; padding: 1rem 1.3rem; margin: 1.2rem 0; }
+    .box-warn { background: var(--warn); border-left: 4px solid var(--warnb); border-radius: 6px; padding: 1rem 1.3rem; margin: 1.2rem 0; }
+    .box-grn  { background: var(--grn);  border-left: 4px solid var(--grnb);  border-radius: 6px; padding: 1rem 1.3rem; margin: 1.2rem 0; }
+    .box strong, .box-warn strong, .box-grn strong {
+      display: block; margin-bottom: 0.4rem; font-size: 0.9rem;
+      text-transform: uppercase; letter-spacing: 0.05em; color: var(--sub); }
+
+    table { width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.95rem; }
+    th { background: var(--blue); color: white; padding: 0.6rem 1rem; text-align: left; }
+    td { padding: 0.55rem 1rem; border-bottom: 1px solid var(--bdr); }
+    tr:nth-child(even) td { background: var(--acc); }
+
+    code { background: #eef1f7; border-radius: 4px; padding: 0.1em 0.4em;
+           font-family: 'Courier New', monospace; font-size: 0.9em; color: #2d2d6e; }
+    pre  { background: #1e2030; color: #cdd6f4; border-radius: 8px;
+           padding: 1.2rem 1.5rem; overflow-x: auto; font-size: 0.88rem;
+           line-height: 1.6; margin: 1rem 0; font-family: 'Courier New', monospace; }
+
+    .step-num { display: inline-block; background: var(--blue); color: white;
+                border-radius: 50%; width: 2rem; height: 2rem; line-height: 2rem;
+                text-align: center; font-weight: bold; margin-right: 0.6rem; font-size: 0.95rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    hr { border: none; border-top: 1px solid var(--bdr); margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>Control Variate Selection for Monte Carlo Integration</h1>
+  <p>
+    A complete walkthrough of<br>
+    <strong>Leluc, Portier &amp; Segers (2021)</strong>,
+    <em>Statistics and Computing</em> 31:50 &mdash;
+    <a href="https://doi.org/10.1007/s11222-021-10011-z" target="_blank">DOI 10.1007/s11222-021-10011-z</a>
+  </p>
+  <p style="margin-top:1rem">Prepared for the ENSAE M1 project: <em>Control variates for a GARCH model — Question 3</em></p>
+</header>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>0 &nbsp; The Big Picture</h2>
+
+  <p>
+    We want to estimate an integral $P(f) = \int f(x)\,P(dx)$ using a Monte Carlo sample
+    $X_1,\ldots,X_n \sim P$. The basic MC estimate is $\hat{\alpha}^{\mathrm{mc}}_n(f) = \frac{1}{n}\sum_i f(X_i)$
+    with variance $n^{-1}\sigma_0^2(f)$.
+  </p>
+
+  <p>
+    We have $m$ <strong>control variates</strong> $h_1,\ldots,h_m$ with $P(h_k)=0$.
+    For any coefficient vector $\beta \in \mathbb{R}^m$, the corrected estimator
+    $P_n(f - \beta^T h)$ is still unbiased. The oracle optimal $\beta^\star$ minimises
+    the variance, and the resulting oracle estimator achieves variance $n^{-1}\sigma^2_m(f) \leq n^{-1}\sigma^2_0(f)$.
+  </p>
+
+  <div class="box">
+    <strong>Central Question</strong>
+    Since $\beta^\star$ is unknown, how do we <em>estimate</em> it from data
+    without introducing too much extra error — especially when $m$ is large?
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>1 &nbsp; OLS Monte Carlo</h2>
+
+  <p>
+    Replace $P$ by the sample measure $P_n$ in the normal equations. This gives the
+    <strong>OLS estimator</strong>:
+  </p>
+  $$\left(\hat{\alpha}^{\mathrm{ols}}_n(f),\, \hat{\beta}^{\mathrm{ols}}_n(f)\right)
+  \in \arg\min_{(\alpha,\beta)\in\mathbb{R}\times\mathbb{R}^m}
+  \left\|f^{(n)} - \alpha\mathbf{1}_n - H\beta\right\|_2^2,
+  \tag{OLS}$$
+  <p>where $H = (h_j(X_i))_{i,j}$ is the $n\times m$ matrix of evaluated control variates.
+  The intercept $\hat{\alpha}^{\mathrm{ols}}_n(f)$ is the ZV estimate of $P(f)$.</p>
+
+  <div class="box-warn">
+    <strong>Two problems with OLS when $m$ is large</strong>
+    <ol style="margin-top:0.5rem">
+      <li><strong>Computational cost</strong>: $\mathcal{O}(nm^2 + m^3)$ — the $m^3$ term grows catastrophically
+        (e.g.\ $m=1000 \Rightarrow m^3 = 10^9$ operations just to invert $H_c^TH_c$).</li>
+      <li><strong>Numerical instability / overfitting</strong>: when $m$ is comparable to $n$,
+        the Gram matrix $H_c^TH_c$ becomes ill-conditioned and OLS over-fits the noise.</li>
+    </ol>
+  </div>
+
+  <p>
+    The paper proves (Theorem 1) a <strong>concentration inequality</strong> for the OLS error:
+    with probability at least $1-\delta$,
+  </p>
+  $$\left|\hat{\alpha}^{\mathrm{ols}}_n(f) - P(f)\right|
+  \leq \sqrt{\frac{2\log(8/\delta)\,\tau^2}{n}}
+  + 58\sqrt{\frac{Bm\log(8m/\delta)\log(4/\delta)\,\tau^2}{n^2}},$$
+  <p>
+    where $B = \sup_x h(x)^T G^{-1} h(x)$ (a measure of the control variate complexity)
+    and $\tau^2$ is a sub-Gaussian variance parameter of the residual.
+    The first term is the oracle rate; the second is the extra cost of estimating $\beta$.
+    For this bound to be tight, one needs $mB\log(m) = \mathcal{O}(n)$ — i.e.\ $m$ must not be too large.
+  </p>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>2 &nbsp; LASSO Monte Carlo</h2>
+
+  <p>
+    The <strong>LASSO estimator</strong> adds an $\ell_1$ penalty to the OLS objective:
+  </p>
+  $$\hat{\beta}^{\mathrm{lasso}}_n(f) \in \arg\min_{\beta\in\mathbb{R}^m}
+  \frac{1}{2n}\left\|f^{(n)}_c - H_c\beta\right\|_2^2 + \lambda\|\beta\|_1,
+  \tag{LASSO}$$
+  $$\hat{\alpha}^{\mathrm{lasso}}_n(f) = P_n\!\left[f - \hat{\beta}^{\mathrm{lasso}}_n(f)^T h\right].$$
+
+  <p>
+    The $\ell_1$ penalty forces most coefficients to zero, effectively <em>selecting</em>
+    the most useful control variates. This addresses both problems with OLS:
+    fewer non-zero coefficients means faster computation and less overfitting.
+  </p>
+
+  <p>
+    The paper proves (Theorem 2) that the LASSO error bound replaces the total
+    number $m$ of variates by the <strong>active number</strong> $\ell^\star = |\mathrm{supp}(\beta^\star)|$:
+  </p>
+  $$\left|\hat{\alpha}^{\mathrm{lasso}}_n(f) - P(f)\right|
+  \leq \sqrt{\frac{2\log(8/\delta)\,\tau^2}{n}}
+  + 476\ell^\star\log(8m/\delta)\,(U_h^2/\gamma^\star)\,\frac{\tau^2}{n},$$
+  <p>
+    where $U_h = \sup_x \max_k |h_k(x)|$ and $\gamma^\star$ is the smallest eigenvalue of the
+    Gram matrix restricted to active variates.
+    When only $\ell^\star \ll m$ variates are truly useful, this is dramatically tighter than
+    the OLS bound.
+  </p>
+
+  <h3>Choice of $\lambda$</h3>
+  <p>
+    The regularisation parameter $\lambda$ controls the number of selected variates.
+    Two practical methods are proposed:
+  </p>
+  <ul>
+    <li><strong>$K$-fold cross-validation</strong> (Algorithm 1): standard but computationally expensive.</li>
+    <li><strong>Dichotomic search</strong> (Algorithm 2): enforces the number of selected variates
+      to lie in $[c_1\sqrt{n},\, c_2\sqrt{n}]$ (with $c_1=3$, $c_2=12$ recommended).
+      Much faster and motivated by the theoretical bound.</li>
+  </ul>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>3 &nbsp; LSLASSO — The Best of Both Worlds</h2>
+
+  <p>
+    The <strong>LSLASSO</strong> (Least-Squares LASSO) method combines:
+  </p>
+
+  <p><span class="step-num">1</span>
+    <strong>Selection step (LASSO on a subsample of size $N \leq n$)</strong>:
+    Run LASSO on a smaller subsample $X_1,\ldots,X_N$ to identify the active set
+    $\hat{S}_N = \mathrm{supp}(\hat{\beta}^{\mathrm{lasso}}_N(f))$.
+  </p>
+
+  <p><span class="step-num">2</span>
+    <strong>Estimation step (OLS on the full sample, active variates only)</strong>:
+    Run OLS on the full sample $X_1,\ldots,X_n$ using only the $\hat{\ell}$ selected variates.
+  </p>
+
+  <p>
+    The theoretical guarantee (Theorem 4) is essentially the same as for OLS with the true
+    active set — the LASSO correctly recovers $S^\star$ with high probability
+    (Theorem 3), after which the LSLASSO reduces to the optimal OLS.
+  </p>
+
+  <div class="box-grn">
+    <strong>Why use a subsample for step 1?</strong>
+    The LASSO selection only needs to identify which variates are useful, not estimate
+    their coefficients precisely. A subsample of size $N = \lfloor 15\sqrt{n}\rfloor$ is
+    enough for selection, and reduces the first-step cost from $\mathcal{O}(nD)$
+    to $\mathcal{O}(ND)$ where $D$ is the number of coordinate descent iterations.
+  </div>
+
+  <table>
+    <tr><th>Method</th><th>Cost</th><th>Key advantage</th><th>Key weakness</th></tr>
+    <tr>
+      <td>OLS</td><td>$\mathcal{O}(nm^2 + m^3)$</td>
+      <td>Optimal when $m \ll n$</td>
+      <td>Breaks down when $m \sim n$</td>
+    </tr>
+    <tr>
+      <td>LASSO</td><td>$\mathcal{O}(nD + nt)$</td>
+      <td>Handles large $m$, variable selection</td>
+      <td>Slightly biased; $\lambda$ tuning needed</td>
+    </tr>
+    <tr>
+      <td>LSLASSO</td><td>$\mathcal{O}(ND + n\hat{\ell}^2 + \hat{\ell}^3 + nt)$</td>
+      <td>Oracle OLS rate once selection correct</td>
+      <td>Two-stage; assumes sparsity</td>
+    </tr>
+    <tr>
+      <td>LSLASSOX</td><td>Same but $N = \lfloor 15\sqrt{n}\rfloor$</td>
+      <td>Best speed, minimal accuracy loss</td>
+      <td>Approximate selection</td>
+    </tr>
+  </table>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>4 &nbsp; Applying This to Our GARCH Problem (Q3)</h2>
+
+  <h3>Degree-2 control variates</h3>
+  <p>
+    From Mira et al. (2013) Eq. (8), using $P(\theta) = \mathbf{a}^T\theta + \frac{1}{2}\theta^T B\theta$:
+    $$\tilde{f}(\theta) = f(\theta) - \tfrac{1}{2}\mathrm{tr}(B) + (\mathbf{a} + B\theta)^T \mathbf{z}(\theta).$$
+    For $d=3$ (GARCH), this gives $m = \frac{1}{2}d(d+3) = 9$ control variates:
+  </p>
+  <ul>
+    <li><strong>Linear</strong> (3): $z_1, z_2, z_3$</li>
+    <li><strong>Quadratic</strong> (6): $\omega_j z_k$ for $j \leq k$</li>
+  </ul>
+
+  <p>
+    While $m=9$ is not large enough for OLS to be a problem in our 3-parameter case,
+    the LASSO approach is still valuable because:
+  </p>
+  <ul>
+    <li>Not all 9 quadratic terms may be equally useful — LASSO identifies the most relevant ones</li>
+    <li>The demonstration generalises to higher-dimensional models</li>
+    <li>LASSO avoids overfitting when the sample has high autocorrelation (low ESS)</li>
+  </ul>
+
+  <h3>Implementation in our notebook</h3>
+  <p>We compare three methods:</p>
+  <table>
+    <tr><th>Method</th><th>Variates</th><th>Selection</th></tr>
+    <tr><td>Degree-1 OLS</td><td>3</td><td>None (all kept)</td></tr>
+    <tr><td>Degree-2 OLS</td><td>9</td><td>None (all kept)</td></tr>
+    <tr><td>Degree-2 LASSO</td><td>9 available</td><td>$\ell_1$ penalty, CV for $\lambda$</td></tr>
+  </table>
+
+  <p>
+    The expected result: degree-2 outperforms degree-1, and LASSO matches or beats OLS
+    on degree-2 by discarding uninformative cross-terms.
+    On real financial data (where the posterior is irregular), LASSO's sparsity
+    selection should give more robust variance reductions than degree-2 OLS.
+  </p>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section>
+  <h2>5 &nbsp; Key Takeaways</h2>
+
+  <div class="box-grn">
+    <strong>Summary</strong>
+    <ul style="margin-top:0.5rem">
+      <li>OLS is optimal when $m \ll n$ but collapses when $m \sim n$.</li>
+      <li>LASSO selects the few truly useful variates, keeping computation cheap and avoiding overfitting.</li>
+      <li>LSLASSO achieves the oracle OLS rate once LASSO correctly selects the active set.</li>
+      <li>The dichotomic search (target $\sqrt{n}$ selected variates) is the practical recommendation.</li>
+      <li>In the Bayesian inference examples (Section 5), LASSO/LSLASSOX consistently outperform
+          OLS when $m$ is large — by orders of magnitude in some cases.</li>
+    </ul>
+  </div>
+</section>
+
+
+<footer style="text-align:center; color:var(--sub); font-size:0.85rem; padding: 2rem 0;">
+  ENSAE Paris M1 — Simulation and Monte Carlo 2025-2026
+</footer>
+
+</div>
+</body>
+</html>

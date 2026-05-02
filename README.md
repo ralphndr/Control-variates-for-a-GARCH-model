@@ -131,7 +131,7 @@ Block averaging delivers 2–4× higher reductions than the full-chain OLS, conf
 
 ```bash
 # clone the repo
-git clone https://github.com/your-username/Control-variates-for-a-GARCH-model.git
+git clone https://github.com/ralphndr/Control-variates-for-a-GARCH-model.git
 cd Control-variates-for-a-GARCH-model
 
 # install dependencies

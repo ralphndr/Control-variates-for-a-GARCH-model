@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Paper Explanation — Zero-Variance MCMC for GARCH</title>
+
+  <!-- MathJax for LaTeX rendering -->
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath:  [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        tags: 'ams'
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+
+  <style>
+    :root {
+      --blue:   #1a4f8a;
+      --teal:   #0d7377;
+      --bg:     #f9f9f9;
+      --card:   #ffffff;
+      --border: #dde3ec;
+      --text:   #1c1c2e;
+      --sub:    #4a4a6a;
+      --accent: #e8f0fb;
+      --warn:   #fff8e1;
+      --warn-b: #f9a825;
+      --green:  #e8f5e9;
+      --green-b:#388e3c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Georgia', serif;
+      font-size: 17px;
+      line-height: 1.75;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--blue);
+      color: white;
+      padding: 2.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2.5rem;
+    }
+    header h1 { font-size: 1.8rem; font-weight: bold; margin-bottom: 0.4rem; }
+    header p  { font-size: 0.95rem; opacity: 0.85; }
+    header a  { color: #afd4ff; }
+
+    /* ── Section ── */
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2rem 2.2rem;
+      margin-bottom: 2rem;
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      color: var(--blue);
+      border-bottom: 2px solid var(--blue);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.2rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      color: var(--teal);
+      margin: 1.6rem 0 0.7rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    /* ── Boxes ── */
+    .box {
+      background: var(--accent);
+      border-left: 4px solid var(--blue);
+      border-radius: 6px;
+      padding: 1rem 1.3rem;
+      margin: 1.2rem 0;
+    }
+    .box-warn {
+      background: var(--warn);
+      border-left: 4px solid var(--warn-b);
+      border-radius: 6px;
+      padding: 1rem 1.3rem;
+      margin: 1.2rem 0;
+    }
+    .box-green {
+      background: var(--green);
+      border-left: 4px solid var(--green-b);
+      border-radius: 6px;
+      padding: 1rem 1.3rem;
+      margin: 1.2rem 0;
+    }
+    .box strong, .box-warn strong, .box-green strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--sub);
+    }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      font-size: 0.95rem;
+    }
+    th {
+      background: var(--blue);
+      color: white;
+      padding: 0.6rem 1rem;
+      text-align: left;
+    }
+    td {
+      padding: 0.55rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:nth-child(even) td { background: var(--accent); }
+
+    /* ── Code ── */
+    code {
+      background: #eef1f7;
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      color: #2d2d6e;
+    }
+    pre {
+      background: #1e2030;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 1.2rem 1.5rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      margin: 1rem 0;
+      font-family: 'Courier New', monospace;
+    }
+
+    /* ── Step numbers ── */
+    .step-num {
+      display: inline-block;
+      background: var(--blue);
+      color: white;
+      border-radius: 50%;
+      width: 2rem; height: 2rem;
+      line-height: 2rem;
+      text-align: center;
+      font-weight: bold;
+      margin-right: 0.6rem;
+      font-size: 0.95rem;
+    }
+
+    /* ── Misc ── */
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    .sub { color: var(--sub); font-size: 0.92rem; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+    .highlight {
+      background: #fffde7;
+      border-radius: 4px;
+      padding: 0 0.2em;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<header>
+  <h1>Zero-Variance MCMC for Bayesian Estimators</h1>
+  <p>
+    A complete walkthrough of<br>
+    <strong>Mira, Solgi &amp; Imparato (2013)</strong>,
+    <em>Stat Comput</em> 23:653–662 &mdash;
+    <a href="https://doi.org/10.1007/s11222-012-9344-6" target="_blank">DOI 10.1007/s11222-012-9344-6</a>
+  </p>
+  <p style="margin-top:1rem">Prepared for the ENSAE M1 project: <em>Control variates for a GARCH model</em></p>
+</header>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>0 &nbsp; The Big Picture</h2>
+
+  <p>
+    We run an MCMC chain $(x^1, \ldots, x^N)$ targeting a posterior $\pi$.
+    We want to estimate the posterior mean of some function $f$:
+    $$\mu_f = \mathbb{E}_\pi[f(X)] = \int f(x)\,\pi(x)\,dx.$$
+    The standard MCMC estimator is
+    $$\hat{\mu}_f = \frac{1}{N}\sum_{i=1}^N f(x^i).$$
+    This is <em>consistent</em>, but it has a <em>variance</em> that decays only like $1/N$.
+  </p>
+
+  <div class="box">
+    <strong>Central Question of the Paper</strong>
+    Can we replace $f$ with a cleverer function $\tilde{f}$ such that
+    $\mathbb{E}_\pi[\tilde{f}] = \mathbb{E}_\pi[f]$ exactly,
+    but $\operatorname{Var}_\pi(\tilde{f}) \ll \operatorname{Var}_\pi(f)$?
+  </div>
+
+  <p>
+    The answer is <strong>yes</strong>, using a technique called
+    <em>control variates</em>, imported from quantum physics into statistics.
+  </p>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>1 &nbsp; Control Variates — The Basic Idea</h2>
+
+  <p>
+    A <strong>control variate</strong> is a random variable $Z$ satisfying
+    $\mathbb{E}_\pi[Z] = 0$. For any scalar $\beta$:
+    $$\tilde{f}(x) = f(x) - \beta\,Z(x)$$
+    still satisfies $\mathbb{E}_\pi[\tilde{f}] = \mathbb{E}_\pi[f]$, but its variance is:
+    $$\operatorname{Var}(\tilde{f}) = \operatorname{Var}(f) - 2\beta\,\operatorname{Cov}(f,Z) + \beta^2\operatorname{Var}(Z).$$
+    Minimising over $\beta$ gives the <strong>optimal coefficient</strong>:
+    $$\beta^* = \frac{\operatorname{Cov}(f(X),\, Z(X))}{\operatorname{Var}(Z(X))}.$$
+  </p>
+
+  <p>The variance reduction achieved is:</p>
+  $$\operatorname{Var}(\tilde{f}) = \operatorname{Var}(f)\,(1 - \rho_{f,Z}^2),$$
+  <p>where $\rho_{f,Z}$ is the correlation between $f$ and $Z$.
+  The more correlated $Z$ is with $f$, the bigger the gain.
+  </p>
+
+  <div class="box-warn">
+    <strong>The Hard Part</strong>
+    You need a good $Z$ — something that (1) has mean zero under $\pi$ for free,
+    and (2) is strongly correlated with $f$.
+    The paper solves this problem using an idea from quantum physics.
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>2 &nbsp; The Zero-Variance Principle (from Physics)</h2>
+
+  <p>
+    Assaraf &amp; Caffarel (1999, 2003) introduced the following idea in quantum Monte Carlo.
+    Introduce:
+  </p>
+  <ul>
+    <li>An operator $H$ that maps functions to functions</li>
+    <li>A free "trial function" $\psi$ of your choice</li>
+  </ul>
+
+  <p>And define the re-normalised estimand:</p>
+  $$\boxed{\tilde{f}(x) = f(x) + \frac{H\psi(x)}{\sqrt{\pi(x)}}.}
+  \tag{2}$$
+
+  <p>
+    The operator $H$ is designed so that the term $\dfrac{H\psi}{\sqrt{\pi}}$
+    has <strong>mean zero under $\pi$</strong> automatically —
+    making it a valid control variate for <em>any</em> choice of $\psi$.
+    The art is choosing $\psi$ to make the variance small.
+  </p>
+
+  <div class="box-green">
+    <strong>Intuition</strong>
+    In the ideal case, if you could solve $H\psi = -\sqrt{\pi}(f - \mu_f)$
+    exactly, then $\tilde{f}$ would be <em>constant</em>, giving zero variance.
+    Since you can't solve this in general, you approximate $\psi$ with a polynomial,
+    and get a <em>near</em>-zero variance estimator.
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>3 &nbsp; Choosing the Operator $H$ (Section 2 of the paper)</h2>
+
+  <p>
+    The paper focuses on the <strong>Schrödinger-type Hamiltonian</strong>
+    (Equation 7):
+  </p>
+  $$H f = -\frac{1}{2}\sum_{i=1}^d \frac{\partial^2 f}{\partial x_i^2} + V(x)\,f,
+  \tag{7}$$
+  <p>where the potential is constructed from the target:</p>
+  $$V(x) = \frac{1}{2\sqrt{\pi}}\,\Delta\sqrt{\pi},
+  \qquad \Delta = \sum_{i=1}^d \frac{\partial^2}{\partial x_i^2}.$$
+
+  <h3>Why this operator?</h3>
+  <table>
+    <tr><th>Property</th><th>Schrödinger operator</th></tr>
+    <tr><td>Needs normalising constant of $\pi$?</td><td><strong>No</strong> — it cancels in the ratio</td></tr>
+    <tr><td>Requires reversibility of the chain?</td><td><strong>No</strong></td></tr>
+    <tr><td>Depends on the MCMC kernel used?</td><td><strong>No</strong> — post-process any sampler</td></tr>
+    <tr><td>State space</td><td>Continuous $\mathbb{R}^d$ only</td></tr>
+  </table>
+
+  <p>
+    This last point is crucial for our project:
+    we can run the RWM sampler we already have, and <em>then</em>
+    apply the control-variate correction as pure post-processing.
+    No need to modify the sampler.
+  </p>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>4 &nbsp; The Key Formula — Equation (8)</h2>
+
+  <p>
+    With the trial function $\psi(x) = P(x)\sqrt{\pi(x)}$, where $P$ is a polynomial,
+    the Schrödinger operator applied in (2) simplifies beautifully to:
+  </p>
+
+  $$\boxed{\tilde{f}(x) = f(x) - \frac{1}{2}\Delta P(x) + \nabla P(x)\cdot \mathbf{z}(x)}
+  \tag{8}$$
+
+  <p>where</p>
+  $$\mathbf{z}(x) = -\frac{1}{2}\nabla \log\pi(x).$$
+
+  <p>
+    The vector $\mathbf{z}$ is the <strong>score of the target</strong>,
+    scaled by $-\tfrac{1}{2}$. It is <em>automatically mean-zero</em> under $\pi$:
+    $$\mathbb{E}_\pi[\mathbf{z}(X)] = 0.$$
+    No extra simulation is needed — just differentiate the log-posterior you already compute.
+  </p>
+
+  <hr>
+
+  <h3>Case 1 — Degree-1 polynomial: $P(x) = \mathbf{a}^T x$</h3>
+
+  <p>
+    Here $\Delta P = 0$ (all second derivatives vanish) and $\nabla P = \mathbf{a}$,
+    so Equation (8) becomes simply:
+  </p>
+  $$\tilde{f}(x) = f(x) + \mathbf{a}^T \mathbf{z}(x).$$
+
+  <p>
+    This is <em>exactly</em> the classical multivariate control-variate estimator,
+    with the score components $z_1, \ldots, z_d$ as the control variates.
+    The optimal coefficient vector is:
+  </p>
+  $$\mathbf{a}^* = -\Sigma_{zz}^{-1}\,\sigma(\mathbf{z}, f),$$
+  <p>where $\Sigma_{zz} = \mathbb{E}[\mathbf{z}\mathbf{z}^T]$ and $\sigma(\mathbf{z},f) = \mathbb{E}[\mathbf{z}\,f]$
+  — both estimated from the MCMC samples.</p>
+
+  <div class="box">
+    <strong>Equivalent formulation (linear regression)</strong>
+    Finding $\mathbf{a}^*$ is identical to running an OLS regression of $f(x^i)$
+    on the design matrix $[\mathbf{z}(x^1), \ldots, \mathbf{z}(x^N)]^T$,
+    and extracting the slope coefficients.
+    The ZV estimator is then the <em>intercept</em> of that regression.
+  </div>
+
+  <hr>
+
+  <h3>Case 2 — Degree-2 polynomial: $P(x) = \mathbf{a}^T x + \tfrac{1}{2}x^T B x$</h3>
+
+  <p>
+    Now $\Delta P = \operatorname{tr}(B)$ and $\nabla P = \mathbf{a} + Bx$, so:
+  </p>
+  $$\tilde{f}(x) = f(x) - \frac{1}{2}\operatorname{tr}(B) + (\mathbf{a} + Bx)^T \mathbf{z}(x).$$
+
+  <p>
+    The control variate vector now contains:
+    $z_j$ (from the linear term) and $x_k z_j$ for all pairs $j, k$
+    (from the quadratic term). Total dimension: $\frac{1}{2}d(d+3)$.
+  </p>
+
+  <table>
+    <tr><th>Degree</th><th>Number of control variates</th><th>For $d=3$ (GARCH)</th></tr>
+    <tr><td>1</td><td>$d$</td><td>3</td></tr>
+    <tr><td>2</td><td>$\frac{1}{2}d(d+3)$</td><td>9</td></tr>
+    <tr><td>3</td><td>$\binom{d+3}{d} - 1$</td><td>19</td></tr>
+  </table>
+
+  <div class="box-warn">
+    <strong>Cost warning for degree 2</strong>
+    The OLS regression matrix $\Sigma_{zz}$ now has dimension of order $d^2$.
+    For large $d$ this becomes expensive to invert.
+    This is why Question 3 asks us to use <em>Lasso</em>
+    to select only the most useful control variates.
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>5 &nbsp; Computing $\mathbf{z}$ for the GARCH(1,1) Model</h2>
+
+  <p>
+    The GARCH(1,1) model is:
+    $$r_t \mid \mathcal{F}_{t-1} \sim \mathcal{N}(0, h_t), \qquad
+    h_t = \omega_1 + \omega_2\,r_{t-1}^2 + \omega_3\,h_{t-1},$$
+    with $\theta = (\omega_1, \omega_2, \omega_3)$.
+  </p>
+
+  <p>The log-posterior (up to a constant) is:</p>
+  $$\log\pi(\theta \mid r) = \log\pi_0(\theta) - \frac{1}{2}\sum_{t=1}^T
+  \left[\log h_t + \frac{r_t^2}{h_t}\right],$$
+  <p>where $\pi_0(\theta)$ is the truncated-normal prior.</p>
+
+  <p>
+    The score vector is $\mathbf{z} = -\tfrac{1}{2}\nabla_\theta\log\pi$,
+    so each component $z_j = -\tfrac{1}{2}\frac{\partial}{\partial\omega_j}\log\pi$
+    requires differentiating through the recursion $h_t$.
+  </p>
+
+  <h3>Differentiating through the variance recursion</h3>
+
+  <p>Let $\dot{h}_t^{(j)} = \partial h_t / \partial\omega_j$. These satisfy the recursions:</p>
+
+  <table>
+    <tr><th>Parameter $j$</th><th>Recursion for $\dot{h}_t^{(j)}$</th><th>Init</th></tr>
+    <tr>
+      <td>$\omega_1$</td>
+      <td>$\dot{h}_t^{(1)} = 1 + \omega_3\,\dot{h}_{t-1}^{(1)}$</td>
+      <td>$\dot{h}_0^{(1)} = \dfrac{1}{1-\omega_2-\omega_3}$</td>
+    </tr>
+    <tr>
+      <td>$\omega_2$</td>
+      <td>$\dot{h}_t^{(2)} = r_{t-1}^2 + \omega_3\,\dot{h}_{t-1}^{(2)}$</td>
+      <td>$\dot{h}_0^{(2)} = 0$</td>
+    </tr>
+    <tr>
+      <td>$\omega_3$</td>
+      <td>$\dot{h}_t^{(3)} = h_{t-1} + \omega_3\,\dot{h}_{t-1}^{(3)}$</td>
+      <td>$\dot{h}_0^{(3)} = 0$</td>
+    </tr>
+  </table>
+
+  <p>Then the log-likelihood gradient is:</p>
+  $$\frac{\partial \ell}{\partial \omega_j} =
+  -\frac{1}{2}\sum_{t=1}^T \left(\frac{1}{h_t} - \frac{r_t^2}{h_t^2}\right)\dot{h}_t^{(j)}.$$
+
+  <p>Adding the prior gradient (truncated-normal: $\partial\log\pi_0/\partial\omega_j = -\omega_j/\sigma_0^2$):</p>
+  $$z_j(\theta) = -\frac{1}{2}\frac{\partial\log\pi}{\partial\omega_j}
+  = \frac{\omega_j}{2\sigma_0^2}
+  + \frac{1}{4}\sum_{t=1}^T \left(\frac{1}{h_t} - \frac{r_t^2}{h_t^2}\right)\dot{h}_t^{(j)}.$$
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>6 &nbsp; The Two-Stage Practical Algorithm</h2>
+
+  <div class="box">
+    <strong>Full Procedure (degree-1 case)</strong>
+  </div>
+
+  <p><span class="step-num">1</span>
+  <strong>Run MCMC.</strong>
+  Run RWM for $N$ iterations. Store the chain
+  $\{x^i\}_{i=1}^N$ (after burn-in) along with
+  $\{f(x^i)\}$ and $\{\mathbf{z}(x^i)\}$ for each sample.</p>
+
+  <p><span class="step-num">2</span>
+  <strong>OLS regression.</strong>
+  Regress $f(x^i)$ on $\mathbf{z}(x^i)$ using ordinary least squares:
+  $$f(x^i) = \alpha + \hat{\mathbf{a}}^T \mathbf{z}(x^i) + \varepsilon_i.$$
+  The intercept $\hat{\alpha}$ is the <em>ZV estimate of $\mu_f$</em>.
+  The slopes $\hat{\mathbf{a}}$ give the optimal control-variate coefficients.</p>
+
+  <p><span class="step-num">3</span>
+  <strong>ZV estimator.</strong>
+  Compute the corrected values:
+  $$\tilde{f}(x^i) = f(x^i) + \hat{\mathbf{a}}^T \mathbf{z}(x^i),$$
+  and report $\hat{\mu}_{\tilde{f}} = \tfrac{1}{N}\sum_i \tilde{f}(x^i) = \hat{\alpha}$.</p>
+
+  <p><span class="step-num">4</span>
+  <strong>Variance comparison.</strong>
+  Compare $\hat{\sigma}^2_f = \operatorname{Var}(f(x^i))$ vs
+  $\hat{\sigma}^2_{\tilde{f}} = \operatorname{Var}(\tilde{f}(x^i))$.
+  The ratio is the variance reduction factor.</p>
+
+  <div class="box-green">
+    <strong>Note on the two-stage vs one-stage approach</strong>
+    The paper mentions running a short "stage 1" chain to estimate $\hat{\mathbf{a}}$,
+    then a long "stage 2" chain to compute the ZV estimate.
+    In practice (and as the paper's footnote confirms), you can do everything
+    on a <em>single chain</em>: run the chain once, then post-process it
+    to get both $\hat{\mathbf{a}}$ and $\hat{\mu}_{\tilde{f}}$.
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>7 &nbsp; Theoretical Guarantees (Section 5)</h2>
+
+  <h3>Unbiasedness</h3>
+  <p>
+    The ZV estimator is asymptotically unbiased if the boundary term in integration by parts vanishes:
+    $$\lim_{r\to\infty}\int_{\partial B_r} \pi\,\nabla P \cdot \mathbf{n}\,d\sigma = 0.$$
+    For the GARCH model with truncated-normal priors, this holds because $\pi$
+    decays to zero at the boundary of the parameter space.
+  </p>
+
+  <h3>Central Limit Theorem</h3>
+  <p>
+    Under geometric ergodicity of the chain, $\sqrt{N}(\hat{\mu}_{\tilde{f}} - \mu_f) \to \mathcal{N}(0, V(\tilde{f}))$
+    where $V(\tilde{f}) < V(f)$.
+    The sufficient condition is finiteness of the <strong>Linnik functional</strong>:
+    $$m_j = \mathbb{E}_\pi\left[\left(\frac{\partial}{\partial\omega_j}\log\pi(\theta)\right)^2\right] < \infty, \quad \forall j.$$
+    This is the Fisher information of a location family, and it holds for the GARCH posterior.
+  </p>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>8 &nbsp; Results for the GARCH Model (Table 1 of the paper)</h2>
+
+  <p>
+    The paper fits a GARCH(1,1) to daily DM/GBP returns (1985–1987).
+    The experiment is repeated 100 times.
+    The table reports 95% confidence intervals for the ratio
+    $\operatorname{Var}(\hat{\mu}_f) / \operatorname{Var}(\hat{\mu}_{\tilde{f}})$:
+  </p>
+
+  <table>
+    <tr>
+      <th>Polynomial degree</th>
+      <th>$\hat{\omega}_1$ gain</th>
+      <th>$\hat{\omega}_2$ gain</th>
+      <th>$\hat{\omega}_3$ gain</th>
+    </tr>
+    <tr><td>Degree 1 (3 variates)</td>  <td>8–18×</td>      <td>13–28×</td>      <td>12–27×</td></tr>
+    <tr><td>Degree 2 (9 variates)</td>  <td>1 200–2 700×</td><td>6 100–13 500×</td><td>6 200–13 800×</td></tr>
+    <tr><td>Degree 3 (19 variates)</td> <td>21 000–47 000×</td><td>48 000–107 000×</td><td>26 000–58 000×</td></tr>
+  </table>
+
+  <p>
+    The CPU overhead is only <strong>20% more</strong> than ordinary MCMC
+    (for degree 3), because the control-variate correction is pure post-processing.
+  </p>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>9 &nbsp; What We Implement per Question</h2>
+
+  <table>
+    <tr><th>Question</th><th>What to build</th><th>New ingredient</th></tr>
+    <tr>
+      <td><strong>Q1</strong> ✅</td>
+      <td>RWM sampler targeting the GARCH posterior</td>
+      <td>Log-posterior, recursion for $h_t$</td>
+    </tr>
+    <tr>
+      <td><strong>Q2</strong></td>
+      <td>Score $\mathbf{z}(\theta)$ + degree-1 ZV estimator via OLS</td>
+      <td>Recursion for $\dot{h}_t^{(j)}$, linear regression</td>
+    </tr>
+    <tr>
+      <td><strong>Q3</strong></td>
+      <td>Degree-2 variates ($x_k z_j$ products) + Lasso selection</td>
+      <td>9 variates, sklearn Lasso, compare with OLS</td>
+    </tr>
+    <tr>
+      <td><strong>Q4 (bonus)</strong></td>
+      <td>Is OLS on a correlated MCMC chain valid? Fix via sub-sampling</td>
+      <td>Effective sample size, block-averaging</td>
+    </tr>
+  </table>
+
+  <div class="box-green">
+    <strong>The core insight to remember</strong>
+    The score $\mathbf{z} = -\tfrac{1}{2}\nabla\log\pi$ is mean-zero under $\pi$
+    <em>for free</em> — it requires no extra simulation.
+    Once you have the MCMC chain and you can differentiate the log-posterior,
+    the rest is just linear algebra (OLS or Lasso).
+    The dramatic variance reductions in Table 1 come at essentially no extra computational cost.
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<footer style="text-align:center; color:var(--sub); font-size:0.85rem; padding: 2rem 0;">
+  ENSAE Paris M1 — Simulation and Monte Carlo 2025-2026
+</footer>
+
+</div>
+</body>
+</html>
